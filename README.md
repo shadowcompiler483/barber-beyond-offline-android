@@ -1,24 +1,30 @@
-# BARBER & BEYOND Manager — Offline Android (starter)
+# BARBER & BEYOND Manager — Offline Android v1.1 (testing)
 
-An offline-first **native Android** starter for Android 11+ (API 30), built with Kotlin, Jetpack Compose and Room/SQLite. The database is created on the phone; the app has no internet permission and does not connect to Supabase or Vercel.
+Offline Android app for Android 11+ using Kotlin, Jetpack Compose, and Room/SQLite.
 
-## Included
-- Black-and-gold ELGON LABS branding
-- Local records for sales, expenses, customers and appointments
-- Cash/M-Pesa labels (manual entry only; no payment verification)
-- Dashboard and all-time profit calculations
-- Local record deletion
-- No online account or login
+## v1.1 additions
+- Higher-contrast white headings and an always-visible two-row navigation grid.
+- Dashboard with today, seven-day and monthly profit estimates, and recent records.
+- Time-filtered reports and Cash/M-Pesa sales breakdown.
+- Search across names, notes and payment methods.
+- Edit records, confirmation before deletion.
+- Export JSON backups via Android's Save As document picker.
+- Restore JSON backups via Android's file picker, with data validation and explicit replace confirmation. Restore is transactional (all or nothing).
+
+## IMPORTANT: preserve your first app's data
+
+The previous v1.0 APK was debug-signed on an ephemeral GitHub Actions runner; its signing key is not available. A newly-built APK may have a different signature. Trying to replace v1.0 may fail; uninstalling v1.0 would erase its records because Android backup was disabled and the app had no export feature.
+
+**To protect the existing v1.0 records**, v1.1 deliberately has a DIFFERENT Android application ID (`ke.elgonlabs.barberbeyond.v11`) and a distinct launcher name. It installs beside the original app; it does **not** automatically import old records. Keep the original installed until you have verified all records have been transferred manually or by an authorized ADB export. Do not uninstall or clear data on the original app.
+
+Debug builds from different GitHub runs may also have changing signing keys. Before relying on future in-place app updates, set up a stable private Android signing key (GitHub Actions secrets) or export a backup and restore after reinstalling. **Do not place a signing keystore or passwords in this public repository.**
+
+## Backup security
+
+Backups are portable plain JSON. They are NOT encrypted; protect them like business records. Save a backup in two safe locations, check it can be read, and keep it private. Restore REPLACES all v1.1 records with the JSON records after confirmation; it does not merge.
+
+The app has **no internet permission** and does not connect to Supabase, Vercel or M-Pesa systems. Figures reflect manually entered values, not verified payments or complete accounting.
 
 ## Build
-1. Open this folder in Android Studio (with Android SDK 35 and JDK 17 installed).
-2. Allow Gradle to sync (requires internet once to fetch dependencies).
-3. Build > Build APK(s). Install the debug APK on your Android 11+ phone.
-4. Turn off mobile data/Wi-Fi and test recording and reopening entries.
 
-## Important limitations
-This is an **initial functional source project**, not a verified compiled APK. The build has not been tested in this environment because Android SDK/Gradle are unavailable. Do not use it as your sole business ledger yet.
-
-Not yet implemented: encrypted PIN, edit existing records, robust date-filtered reports, CSV/JSON backup and restore, automatic backups, appointment reminders, multi-device transfer, and migration from Supabase. Deleting a record is immediate. Keep using the existing online app until the offline app has been built, tested, and a reliable backup workflow is added.
-
-Records reside in the app's private local SQLite database. Uninstalling or clearing app data destroys them. Backups are deliberately disabled at the Android manifest level until a tested explicit export/import feature is added.
+Push to GitHub main. GitHub Actions builds `app-debug.apk`, available as the artifact `barber-beyond-v1-1-debug-apk` under Actions > run > Artifacts. This is a development/testing build, not a signed production release.

@@ -1,0 +1,41 @@
+BARBER & BEYOND MANAGER — v1.1 UPGRADE FROM ACODE
+
+IMPORTANT: DO NOT uninstall or clear data on the original app.
+V1.1 uses a separate application ID and will install alongside the original.
+
+1. Download BarberBeyond-v1.1-UPGRADE.zip in ChatGPT.
+2. Extract it in Acode's File Browser to a NEW project folder under /public.
+   The extracted folder must directly contain app, .github, and README.md.
+3. Open Acode's Alpine terminal and locate the folder if unsure:
+
+   find /public -name BackupCodec.kt
+
+   Example result:
+   /public/6789/app/src/main/java/ke/elgonlabs/barberbeyond/BackupCodec.kt
+
+   In that example the project folder is /public/6789.
+
+4. Copy the new source into the EXISTING cloned GitHub repository:
+
+   cd /public/barber-beyond-repo
+   cp -R /public/6789/. ./
+   git status --short
+
+   REPLACE 6789 with the actual folder number from step 3.
+
+5. Commit and push:
+
+   git add -A
+   git commit -m "Upgrade offline manager to v1.1"
+   git push origin main
+
+6. Check GitHub Actions. Download the ZIP artifact ONLY after the build turns GREEN.
+7. Extract and install the APK labelled "Barber & Beyond 1.1".
+   The previous app will remain installed with its old records.
+8. Test with sample data: add/edit/delete a record; export JSON from Reports;
+   restore JSON and verify that the restored records match.
+
+CAUTION: v1.1 does NOT automatically access the original app's records.
+Manually re-enter needed records into v1.1, or keep using the original app.
+No production signing key is configured yet; new debug APK builds may have
+incompatible signing keys. Always export backups from v1.1 before reinstalling.
