@@ -1,0 +1,10 @@
+# Never commit signing keys, passwords, or private backups
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.env
+local.properties
+.gradle/
+**/build/
+*.json.backup

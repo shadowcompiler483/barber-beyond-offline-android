@@ -8,13 +8,35 @@ android {
     namespace = "ke.elgonlabs.barberbeyond"
     compileSdk = 35
     defaultConfig {
-        // Separate install protects v1.1 records; import its JSON backup into v1.2.
-        // GitHub's default debug signing key can differ between build runners.
-        applicationId = "ke.elgonlabs.barberbeyond.v12"
+        // Stable identity for v1.3 and later signed releases. Never change it in future versions.
+        applicationId = "ke.elgonlabs.barberbeyond.manager"
         minSdk = 30
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.3.0"
+    }
+    signingConfigs {
+        create("barberRelease") {
+            // Signing material is supplied only by GitHub Actions secrets. Never commit a keystore.
+            val path = System.getenv("BB_RELEASE_KEYSTORE_PATH")
+            if (!path.isNullOrBlank()) {
+                storeFile = file(path)
+                storePassword = System.getenv("BB_RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("BB_RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("BB_RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            // Debug/preview builds are isolated from the signed main app.
+            applicationIdSuffix = ".preview"
+            versionNameSuffix = "-preview"
+        }
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("barberRelease")
+            isMinifyEnabled = false
+        }
     }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

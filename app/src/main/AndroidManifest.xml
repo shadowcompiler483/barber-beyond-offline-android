@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:allowBackup="false"
-        android:label="Barber &amp; Beyond 1.2"
+        android:label="Barber &amp; Beyond Manager"
         android:icon="@drawable/bb_logo"
         android:theme="@style/Theme.BarberBeyond"
         android:usesCleartextTraffic="false">

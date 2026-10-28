@@ -1,28 +1,33 @@
-# BARBER & BEYOND — Official Logo Startup (v1.2 source overlay)
+# BARBER & BEYOND Manager — Android v1.3 upgrade
 
-This patch customizes the **v1.2** opening splash screen using the official Barber & Beyond Hair Studio logo supplied by the shop owner.
+**Offline Android app** powered by ELGON LABS, using Kotlin, Jetpack Compose, and Room/SQLite.
 
-## Features
-- Full official gold-and-black logo (with crown, barber tools and Hair Studio branding) is shown in the opening screen.
-- App launcher icon and Android 12+ native startup icon use a focused crop of the same official emblem.
-- Gold spinner displays during a real local Room database readiness check, then opens the existing dashboard.
-- Original offline records, JSON backup/restore, navigation and reports are unchanged.
-- No internet permission was added.
+## What changed
+- Editable **Services** catalogue. Tap **Load suggested studio prices** once to import a starter list; review each price before real use. Services are saved as normal Room records (`type=Services`) and included in v1.3 JSON backups.
+- **Sell** next to any service pre-fills a sales entry; amount stays editable.
+- **Appointments** can now have a specific date, time, service, and status (Booked/Completed/Cancelled), stored safely in existing records. Older appointments remain visible as *legacy bookings* and can be edited to add a proper schedule. No notifications or SMS are sent.
+- Dashboard shows upcoming bookings and catalogue count.
+- Official full logo, launcher icon, gold loading indicator, reports and export/restore are retained.
 
-## Install this source overlay using Acode
-1. Extract this ZIP to a **new folder** in Acode.
-2. Copy its contents (including `.github` and `app`) into the existing Git checkout at `/public/barber-beyond-repo`, preserving folder paths. (Do not delete the existing project.)
-3. In Acode Alpine terminal:
+## Backup compatibility and safety
+- **Before switching**: in v1.2 go to Reports > Export JSON and save at least two private copies.
+- v1.3 installs separately and does **not** read v1.2 local records automatically. Use Reports > Restore JSON, which **replaces** any current v1.3 records only after confirmation.
+- v1.3 JSON backups use schema 2 to include Services, and the v1.3 restore can read either schema 1 (v1.1/v1.2) or schema 2. Old versions may reject schema 2 backups. Export your records before uninstalling any app.
+- JSON backups are **unencrypted**, protect them like business data.
 
-   ```sh
-   cd /public/barber-beyond-repo
-   git add -A
-   git commit -m "Use official Barber and Beyond logo on splash"
-   git push origin main
-   ```
+## APK builds / signing
 
-4. On GitHub: Actions > Build Android APK > latest build > Artifacts > download APK ZIP if build succeeds.
+The `Build Android APK` workflow runs automatically on pushes to `main` and creates a **PREVIEW DEBUG APK**, installed with app ID `ke.elgonlabs.barberbeyond.manager.preview`. Do **not** depend on preview builds for important records. GitHub Actions debug signing keys are not stable across runners.
 
-**Version identity:** Same `ke.elgonlabs.barberbeyond.v12` identity as the previous, not-yet-installed v1.2 source patch. It is a separate install from v1.1 to protect the existing v1.1 records. On a first v1.2 install, open v1.1 and **Export JSON**, then install v1.2 and **Restore JSON** after checking the backup. Keep v1.1 until every record is verified in v1.2. Since GitHub Actions debug signing varies, do not uninstall a data-bearing v1.2 installation just to replace it; use an explicit backup/migration approach first.
+For a proper updateable main app, use the separate **manual** `Build signed Barber Beyond release APK` workflow. It produces the app ID `ke.elgonlabs.barberbeyond.manager` and requires FOUR GitHub Actions repository secrets:
 
-This is an **uncompiled source patch**, not an APK; its build and launch still require testing.
+- `BB_RELEASE_KEYSTORE_B64`: base64-encoded bytes of a private, locally generated PKCS12 keystore (one line)
+- `BB_RELEASE_STORE_PASSWORD`: keystore password
+- `BB_RELEASE_KEY_ALIAS`: alias of your key (e.g. `barber-beyond`)
+- `BB_RELEASE_KEY_PASSWORD`: private-key password (often same as keystore password for PKCS12)
+
+Generate your signing key **privately on a trusted device**; do NOT commit, post, or share the key, base64 text, password, or secrets. Keep an offline secure backup of the keystore and passwords — losing these means you may not be able to update your signed app. Configure secrets at GitHub repository **Settings → Secrets and variables → Actions → New repository secret**. Only then manually dispatch the signed-release workflow under Actions. Do not install the preview in place of the signed app: they intentionally have different IDs and databases.
+
+A release signed with the *same* keystore and *same* app ID can be installed as an update when `versionCode` increases in later versions. The previously installed v1.2 APK cannot be upgraded in place with this new key; migrate records via JSON instead.
+
+Do NOT enable automatic signed releases until secrets are configured. This sample requires direct user setup for signing and has not been compiled/tested yet.

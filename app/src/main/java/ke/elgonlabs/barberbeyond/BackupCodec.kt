@@ -6,9 +6,9 @@ import org.json.JSONObject
 /** Plain JSON for a user-controlled, offline export. Keep backups private. */
 internal object BackupCodec {
     private const val FORMAT = "barber-beyond-offline-backup"
-    private const val SCHEMA = 1
+    private const val SCHEMA = 2
     private const val MAX_RECORDS = 50_000
-    private val ALLOWED_TYPES = setOf("Sales", "Expenses", "Customers", "Appointments")
+    private val ALLOWED_TYPES = setOf("Sales", "Expenses", "Customers", "Appointments", "Services")
 
     fun encode(records: List<Record>): String {
         val rows = JSONArray()
@@ -34,7 +34,7 @@ internal object BackupCodec {
     fun decode(json: String): List<Record> {
         require(json.length <= 15_000_000) { "Backup is too large" }
         val root = JSONObject(json)
-        require(root.optString("format") == FORMAT && root.optInt("schemaVersion") == SCHEMA) {
+        require(root.optString("format") == FORMAT && root.optInt("schemaVersion") in 1..SCHEMA) {
             "This is not a supported Barber & Beyond backup"
         }
         val rows = root.getJSONArray("records")
