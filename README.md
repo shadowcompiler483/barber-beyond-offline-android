@@ -1,30 +1,28 @@
-# BARBER & BEYOND Manager — Offline Android v1.1 (testing)
+# BARBER & BEYOND — Official Logo Startup (v1.2 source overlay)
 
-Offline Android app for Android 11+ using Kotlin, Jetpack Compose, and Room/SQLite.
+This patch customizes the **v1.2** opening splash screen using the official Barber & Beyond Hair Studio logo supplied by the shop owner.
 
-## v1.1 additions
-- Higher-contrast white headings and an always-visible two-row navigation grid.
-- Dashboard with today, seven-day and monthly profit estimates, and recent records.
-- Time-filtered reports and Cash/M-Pesa sales breakdown.
-- Search across names, notes and payment methods.
-- Edit records, confirmation before deletion.
-- Export JSON backups via Android's Save As document picker.
-- Restore JSON backups via Android's file picker, with data validation and explicit replace confirmation. Restore is transactional (all or nothing).
+## Features
+- Full official gold-and-black logo (with crown, barber tools and Hair Studio branding) is shown in the opening screen.
+- App launcher icon and Android 12+ native startup icon use a focused crop of the same official emblem.
+- Gold spinner displays during a real local Room database readiness check, then opens the existing dashboard.
+- Original offline records, JSON backup/restore, navigation and reports are unchanged.
+- No internet permission was added.
 
-## IMPORTANT: preserve your first app's data
+## Install this source overlay using Acode
+1. Extract this ZIP to a **new folder** in Acode.
+2. Copy its contents (including `.github` and `app`) into the existing Git checkout at `/public/barber-beyond-repo`, preserving folder paths. (Do not delete the existing project.)
+3. In Acode Alpine terminal:
 
-The previous v1.0 APK was debug-signed on an ephemeral GitHub Actions runner; its signing key is not available. A newly-built APK may have a different signature. Trying to replace v1.0 may fail; uninstalling v1.0 would erase its records because Android backup was disabled and the app had no export feature.
+   ```sh
+   cd /public/barber-beyond-repo
+   git add -A
+   git commit -m "Use official Barber and Beyond logo on splash"
+   git push origin main
+   ```
 
-**To protect the existing v1.0 records**, v1.1 deliberately has a DIFFERENT Android application ID (`ke.elgonlabs.barberbeyond.v11`) and a distinct launcher name. It installs beside the original app; it does **not** automatically import old records. Keep the original installed until you have verified all records have been transferred manually or by an authorized ADB export. Do not uninstall or clear data on the original app.
+4. On GitHub: Actions > Build Android APK > latest build > Artifacts > download APK ZIP if build succeeds.
 
-Debug builds from different GitHub runs may also have changing signing keys. Before relying on future in-place app updates, set up a stable private Android signing key (GitHub Actions secrets) or export a backup and restore after reinstalling. **Do not place a signing keystore or passwords in this public repository.**
+**Version identity:** Same `ke.elgonlabs.barberbeyond.v12` identity as the previous, not-yet-installed v1.2 source patch. It is a separate install from v1.1 to protect the existing v1.1 records. On a first v1.2 install, open v1.1 and **Export JSON**, then install v1.2 and **Restore JSON** after checking the backup. Keep v1.1 until every record is verified in v1.2. Since GitHub Actions debug signing varies, do not uninstall a data-bearing v1.2 installation just to replace it; use an explicit backup/migration approach first.
 
-## Backup security
-
-Backups are portable plain JSON. They are NOT encrypted; protect them like business records. Save a backup in two safe locations, check it can be read, and keep it private. Restore REPLACES all v1.1 records with the JSON records after confirmation; it does not merge.
-
-The app has **no internet permission** and does not connect to Supabase, Vercel or M-Pesa systems. Figures reflect manually entered values, not verified payments or complete accounting.
-
-## Build
-
-Push to GitHub main. GitHub Actions builds `app-debug.apk`, available as the artifact `barber-beyond-v1-1-debug-apk` under Actions > run > Artifacts. This is a development/testing build, not a signed production release.
+This is an **uncompiled source patch**, not an APK; its build and launch still require testing.

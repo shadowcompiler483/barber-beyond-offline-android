@@ -8,19 +8,16 @@ android {
     namespace = "ke.elgonlabs.barberbeyond"
     compileSdk = 35
     defaultConfig {
-        // Intentionally distinct from the original debug-signed v1.0 APK.
-        // Keeping the original app installed protects its records until migration.
-        applicationId = "ke.elgonlabs.barberbeyond.v11"
+        // Separate install protects v1.1 records; import its JSON backup into v1.2.
+        // GitHub's default debug signing key can differ between build runners.
+        applicationId = "ke.elgonlabs.barberbeyond.v12"
         minSdk = 30
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
     }
     buildFeatures { compose = true }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
+    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
 }
 dependencies {
