@@ -32,13 +32,35 @@ jobs:
           printf '%s' "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/barber-beyond-release.p12"
           chmod 600 "$RUNNER_TEMP/barber-beyond-release.p12"
           test -s "$RUNNER_TEMP/barber-beyond-release.p12"
+      - name: Diagnose signing keystore (no secret output)
+        shell: bash
+        env:
+          STORE_PASS: ${{ secrets.BB_RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.BB_RELEASE_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.BB_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          STORE="$RUNNER_TEMP/barber-beyond-release.p12"
+          echo 'TEST A: Can Java open the PKCS12 keystore?'
+          if ! keytool -list -keystore "$STORE" -storetype PKCS12 -storepass:env STORE_PASS >/dev/null 2>&1; then
+            echo 'TEST A FAILED: Java cannot open the keystore. Check the uploaded Base64, store password, or keystore format.'
+            exit 1
+          fi
+          echo 'TEST A PASSED'
+          echo 'TEST B: Can Java read the private key using the alias and key password?'
+          if ! keytool -importkeystore -srckeystore "$STORE" -srcstoretype PKCS12 -srcstorepass:env STORE_PASS -srcalias "$KEY_ALIAS" -srckeypass:env KEY_PASS -destkeystore "$RUNNER_TEMP/key-check.jks" -deststoretype JKS -deststorepass:env STORE_PASS -destkeypass:env KEY_PASS -noprompt >/dev/null 2>&1; then
+            echo 'TEST B FAILED: Alias, key password, or private-key format is not accepted by Java.'
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/key-check.jks"
+          echo 'TEST B PASSED'
       - name: Build signed release APK
         env:
           BB_RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/barber-beyond-release.p12
           BB_RELEASE_STORE_PASSWORD: ${{ secrets.BB_RELEASE_STORE_PASSWORD }}
           BB_RELEASE_KEY_ALIAS: ${{ secrets.BB_RELEASE_KEY_ALIAS }}
           BB_RELEASE_KEY_PASSWORD: ${{ secrets.BB_RELEASE_KEY_PASSWORD }}
-        run: gradle --no-daemon assembleRelease
+        run: gradle --no-daemon assembleRelease --stacktrace
       - name: Verify APK signature
         run: |
           set -euo pipefail
