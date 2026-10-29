@@ -1,9 +1,6 @@
 package ke.elgonlabs.barberbeyond
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.os.Bundle
-import org.json.JSONObject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -19,7 +16,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,7 +37,7 @@ private val Panel = Color(0xFF22211F)
 private val TextColor = Color(0xFFF6F4EF)
 private val Muted = Color(0xFFB6B4B0)
 private val Danger = Color(0xFFFF8A80)
-private val tabs = listOf("Dashboard", "Sales", "Expenses", "Customers", "Appointments", "Services", "Reports")
+private val tabs = listOf("Dashboard", "Sales", "Expenses", "Services", "Reports")
 private val suggestedPrices = listOf(
     "Fade" to 100.0, "Beard Trim" to 50.0, "School Cuts" to 50.0,
     "Balding" to 100.0, "Balding + Facial Scrub" to 200.0,
@@ -46,27 +46,6 @@ private val suggestedPrices = listOf(
     "Facial Scrub" to 100.0, "Fade + Hair Rolling" to 150.0,
     "Hair Bleach" to 1000.0, "Hairline + Beard Trim" to 80.0
 )
-private const val BOOKING_MARKER = "BB_BOOKING_V1:"
-private data class BookingMeta(val at: Long, val service: String, val status: String, val comment: String)
-private val bookingStatuses = listOf("Booked", "Completed", "Cancelled")
-private fun encodeBooking(booking: BookingMeta): String = BOOKING_MARKER + JSONObject().apply {
-    put("at", booking.at)
-    put("service", booking.service)
-    put("status", booking.status)
-    put("comment", booking.comment)
-}.toString()
-private fun decodeBooking(raw: String): BookingMeta? = try {
-    if (!raw.startsWith(BOOKING_MARKER)) null else {
-        val obj = JSONObject(raw.removePrefix(BOOKING_MARKER))
-        val status = obj.getString("status")
-        val whenAt = obj.getLong("at")
-        if (status !in bookingStatuses || whenAt <= 0L) null
-        else BookingMeta(whenAt, obj.optString("service"), status, obj.optString("comment"))
-    }
-} catch (_: Exception) { null }
-private fun appointmentTime(value: Long): String =
-    SimpleDateFormat("EEE, dd MMM yyyy • HH:mm", Locale.ENGLISH).format(Date(value))
-
 private fun money(amount: Double) = "KES " + "%,.2f".format(Locale.US, amount)
 private fun date(time: Long) = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(time))
 private fun backupName() = "barber-beyond-${SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date())}.json"
@@ -120,40 +99,13 @@ fun Manager(dao: RecordDao) {
     var formError by remember { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<Record?>(null) }
     var restoreCandidate by remember { mutableStateOf<List<Record>?>(null) }
-    var bookingAt by remember { mutableStateOf<Long?>(null) }
-    var bookingService by remember { mutableStateOf("") }
-    var bookingStatus by remember { mutableStateOf("Booked") }
-
-    fun chooseBookingTime() {
-        val initial = Calendar.getInstance().apply { bookingAt?.let { timeInMillis = it } }
-        DatePickerDialog(context, { _, year, month, dayOfMonth ->
-            val selected = Calendar.getInstance().apply {
-                timeInMillis = initial.timeInMillis
-                set(Calendar.YEAR, year)
-                set(Calendar.MONTH, month)
-                set(Calendar.DAY_OF_MONTH, dayOfMonth)
-            }
-            TimePickerDialog(context, { _, hour, minute ->
-                selected.set(Calendar.HOUR_OF_DAY, hour)
-                selected.set(Calendar.MINUTE, minute)
-                selected.set(Calendar.SECOND, 0)
-                selected.set(Calendar.MILLISECOND, 0)
-                bookingAt = selected.timeInMillis
-            }, selected.get(Calendar.HOUR_OF_DAY), selected.get(Calendar.MINUTE), true).show()
-        }, initial.get(Calendar.YEAR), initial.get(Calendar.MONTH), initial.get(Calendar.DAY_OF_MONTH)).show()
-    }
-
     fun notice(message: String) { scope.launch { snackbar.showSnackbar(message) } }
     fun openEditor(type: String, record: Record? = null) {
         editorType = type
         editing = record
         title = record?.title.orEmpty()
-        amount = record?.let { if (type == "Sales" || type == "Expenses") it.amount.toString() else "" }.orEmpty()
-        val booking = if (type == "Appointments") record?.let { decodeBooking(it.notes) } else null
-        notes = if (type == "Appointments") booking?.comment ?: record?.notes.orEmpty() else record?.notes.orEmpty()
-        bookingAt = booking?.at
-        bookingService = booking?.service.orEmpty()
-        bookingStatus = booking?.status ?: "Booked"
+        amount = record?.let { if (type in listOf("Sales", "Expenses", "Services")) it.amount.toString() else "" }.orEmpty()
+        notes = record?.notes.orEmpty()
         payment = record?.payment ?: "Cash"
         formError = ""
         showEditor = true
@@ -206,11 +158,6 @@ fun Manager(dao: RecordDao) {
     val sales = records.filter { it.type == "Sales" }
     val expenses = records.filter { it.type == "Expenses" }
     val services = records.filter { it.type == "Services" }.sortedBy { it.title.lowercase(Locale.US) }
-    val upcomingBookings = records.asSequence()
-        .filter { it.type == "Appointments" }
-        .mapNotNull { r -> decodeBooking(r.notes)?.let { b -> r to b } }
-        .filter { (_, b) -> b.status == "Booked" && b.at >= System.currentTimeMillis() }
-        .sortedBy { (_, b) -> b.at }.toList()
     val todayStart = startOfToday()
     val todaySales = sales.filter { it.createdAt >= todayStart }.sumOf { it.amount }
     val todayExpenses = expenses.filter { it.createdAt >= todayStart }.sumOf { it.amount }
@@ -229,84 +176,105 @@ fun Manager(dao: RecordDao) {
             snackbarHost = { SnackbarHost(snackbar) }
         ) { contentPadding ->
             Column(Modifier.fillMaxSize().padding(contentPadding).background(Dark)) {
-                Column(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 14.dp)) {
-                    Text("BARBER & BEYOND", color = Gold, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text("OFFLINE MANAGER  •  ELGON LABS  •  v1.3", color = Muted, fontSize = 11.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.bb_logo),
+                        contentDescription = "Barber and Beyond logo",
+                        modifier = Modifier.size(46.dp)
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text("BARBER & BEYOND", color = Gold, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("OFFLINE MANAGER  •  ELGON LABS  •  v1.4", color = Muted, fontSize = 10.sp)
+                    }
+                    Box(Modifier.size(9.dp).background(Gold, CircleShape))
                 }
-                Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
-                    tabs.chunked(4).forEach { rowTabs ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp)) {
+                    tabs.chunked(3).forEach { rowTabs ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             rowTabs.forEach { item ->
-                                val label = if (item == "Appointments") "Bookings" else item
                                 Button(
                                     onClick = { tab = item; search = "" },
-                                    modifier = Modifier.weight(1f).height(42.dp),
+                                    modifier = Modifier.weight(1f).height(44.dp),
                                     contentPadding = PaddingValues(horizontal = 2.dp),
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = RoundedCornerShape(12.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (tab == item) Gold else Panel,
                                         contentColor = if (tab == item) Dark else TextColor
                                     )
                                 ) {
-                                    Text(label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(item, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                         }
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(6.dp))
                     }
                 }
                 Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(tab, color = TextColor, fontWeight = FontWeight.Bold, fontSize = 22.sp, modifier = Modifier.weight(1f))
-                        if (tab in listOf("Sales", "Expenses", "Customers", "Appointments", "Services")) {
+                        if (tab in listOf("Sales", "Expenses", "Services")) {
                             Button(onClick = { openEditor(tab) }) { Text("+ Add") }
-                        } else if (tab == "Dashboard") {
-                            Button(onClick = { openEditor("Sales") }) { Text("+ Sale") }
                         }
                     }
                     Spacer(Modifier.height(8.dp))
                     when (tab) {
                         "Dashboard" -> {
                             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    StatCard("Today's sales", money(todaySales), Modifier.weight(1f))
-                                    StatCard("Today's expenses", money(todayExpenses), Modifier.weight(1f))
-                                }
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    StatCard("Today's profit*", money(todaySales - todayExpenses), Modifier.weight(1f))
-                                    StatCard("Customers", records.count { it.type == "Customers" }.toString(), Modifier.weight(1f))
-                                }
                                 val weekStart = periodStart("7 days")
-                                val weekSaleTotal = sales.filter { it.createdAt >= weekStart }.sumOf { it.amount }
-                                val weekCostTotal = expenses.filter { it.createdAt >= weekStart }.sumOf { it.amount }
+                                val weekProfit = sales.filter { it.createdAt >= weekStart }.sumOf { it.amount } -
+                                    expenses.filter { it.createdAt >= weekStart }.sumOf { it.amount }
                                 val monthStart = periodStart("Month")
-                                val monthSaleTotal = sales.filter { it.createdAt >= monthStart }.sumOf { it.amount }
-                                val monthCostTotal = expenses.filter { it.createdAt >= monthStart }.sumOf { it.amount }
+                                val monthProfit = sales.filter { it.createdAt >= monthStart }.sumOf { it.amount } -
+                                    expenses.filter { it.createdAt >= monthStart }.sumOf { it.amount }
+                                StudioHero(
+                                    salesAmount = money(todaySales),
+                                    dateLabel = SimpleDateFormat("EEEE, dd MMMM", Locale.ENGLISH).format(Date()),
+                                    onNewSale = { openEditor("Sales") },
+                                    onNewExpense = { openEditor("Expenses") }
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Text("Your numbers", color = TextColor, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(9.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    StatCard("7-day profit*", money(weekSaleTotal - weekCostTotal), Modifier.weight(1f))
-                                    StatCard("Monthly profit*", money(monthSaleTotal - monthCostTotal), Modifier.weight(1f))
+                                    StatCard("Today's profit*", money(todaySales - todayExpenses), Modifier.weight(1f), onClick = { tab = "Reports"; period = "Today" })
+                                    StatCard("Today's expenses", money(todayExpenses), Modifier.weight(1f), onClick = { tab = "Expenses" })
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    StatCard("Upcoming bookings", upcomingBookings.size.toString(), Modifier.weight(1f))
-                                    StatCard("Listed services", services.size.toString(), Modifier.weight(1f))
-                                }
-                                upcomingBookings.firstOrNull()?.let { (customer, booking) ->
-                                    Text("Next: ${customer.title} • ${appointmentTime(booking.at)}", color = Gold, fontSize = 12.sp)
-                                    Spacer(Modifier.height(8.dp))
+                                    StatCard("7-day profit*", money(weekProfit), Modifier.weight(1f), onClick = { tab = "Reports"; period = "7 days" })
+                                    StatCard("Monthly profit*", money(monthProfit), Modifier.weight(1f), onClick = { tab = "Reports"; period = "Month" })
                                 }
                                 Spacer(Modifier.height(8.dp))
-                                Text("Recent activity", color = TextColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Quick access", color = TextColor, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(10.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    LaunchTile("Service prices", "Manage your price list", onClick = { tab = "Services"; search = "" }, modifier = Modifier.weight(1f))
+                                    LaunchTile("Business reports", "Cash, M-Pesa and profit", onClick = { tab = "Reports" }, modifier = Modifier.weight(1f))
+                                }
+                                Spacer(Modifier.height(10.dp))
+                                OutlinedButton(
+                                    onClick = { exportLauncher.launch(backupName()) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) { Text("Export a backup of all records", fontSize = 13.sp) }
+                                Spacer(Modifier.height(12.dp))
+                                Text("Recent transactions", color = TextColor, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.height(8.dp))
-                                if (records.isEmpty()) {
-                                    Text("No activity yet. Add your first sale to get started.", color = Muted)
+                                val recentTransactions = records.filter { it.type == "Sales" || it.type == "Expenses" }.take(5)
+                                if (recentTransactions.isEmpty()) {
+                                    Text("Nothing recorded yet. Tap New sale to get started.", color = Muted)
                                 } else {
-                                    records.take(6).forEach { record ->
-                                        RecentRecord(record)
-                                        Spacer(Modifier.height(6.dp))
+                                    recentTransactions.forEach { record ->
+                                        RecentRecord(record, onClick = { tab = record.type; openEditor(record.type, record) })
+                                        Spacer(Modifier.height(7.dp))
                                     }
                                 }
+                                Spacer(Modifier.height(8.dp))
                                 Text("* Estimated profit = recorded sales − recorded expenses.", fontSize = 11.sp, color = Muted)
-                                Spacer(Modifier.height(12.dp))
+                                Spacer(Modifier.height(18.dp))
                             }
                         }
                         "Reports" -> {
@@ -358,9 +326,6 @@ fun Manager(dao: RecordDao) {
                                     }) { Text("Load suggested studio prices") }
                                 }
                             }
-                            if (tab == "Appointments") {
-                                Text("Choose a date and time for new bookings. Older bookings remain available as legacy records.", color = Muted, fontSize = 12.sp)
-                            }
                             OutlinedTextField(
                                 value = search, onValueChange = { search = it },
                                 modifier = Modifier.fillMaxWidth(), singleLine = true,
@@ -372,13 +337,6 @@ fun Manager(dao: RecordDao) {
                                     it.title.contains(search, ignoreCase = true) ||
                                     it.notes.contains(search, ignoreCase = true) ||
                                     it.payment.contains(search, ignoreCase = true))
-                            }.let { results ->
-                                if (tab == "Appointments") results.sortedWith(
-                                    compareBy<Record> {
-                                        val b = decodeBooking(it.notes)
-                                        b == null || b.status != "Booked" || b.at < System.currentTimeMillis()
-                                    }.thenBy { decodeBooking(it.notes)?.at ?: Long.MAX_VALUE }
-                                ) else results
                             }
                             if (matching.isEmpty()) {
                                 Text(if (search.isBlank()) "No $tab records yet. Tap + Add." else "No matching records.", color = Muted)
@@ -397,17 +355,7 @@ fun Manager(dao: RecordDao) {
                                                 } else if (tab == "Services") {
                                                     Text(money(record.amount), color = Gold)
                                                 }
-                                                if (tab == "Appointments") {
-                                                    val booking = decodeBooking(record.notes)
-                                                    if (booking == null) {
-                                                        Text("Legacy booking • choose a time when editing", color = Muted, fontSize = 12.sp)
-                                                        if (record.notes.isNotBlank()) Text(record.notes, color = Muted, fontSize = 12.sp)
-                                                    } else {
-                                                        Text(appointmentTime(booking.at), color = Gold, fontSize = 13.sp)
-                                                        Text("${booking.status}" + if (booking.service.isNotBlank()) " • ${booking.service}" else "", color = Muted, fontSize = 12.sp)
-                                                        if (booking.comment.isNotBlank()) Text(booking.comment, color = Muted, fontSize = 12.sp)
-                                                    }
-                                                } else if (record.notes.isNotBlank()) Text(record.notes, color = Muted, fontSize = 12.sp)
+                                                if (record.notes.isNotBlank()) Text(record.notes, color = Muted, fontSize = 12.sp)
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                                     Text("Added ${date(record.createdAt)}", color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                                                     if (tab == "Services") {
@@ -446,8 +394,6 @@ fun Manager(dao: RecordDao) {
                         OutlinedTextField(
                             value = title, onValueChange = { title = it; formError = "" },
                             label = { Text(when (editorType) {
-                                "Customers" -> "Customer name"
-                                "Appointments" -> "Customer name"
                                 "Services" -> "Service name"
                                 else -> "Service / description"
                             }) }, singleLine = true, modifier = Modifier.fillMaxWidth()
@@ -457,25 +403,6 @@ fun Manager(dao: RecordDao) {
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 services.forEach { service ->
                                     AssistChip(onClick = { title = service.title; amount = service.amount.toString() }, label = { Text(service.title) })
-                                }
-                            }
-                        }
-                        if (editorType == "Appointments") {
-                            OutlinedButton(onClick = { chooseBookingTime() }, modifier = Modifier.fillMaxWidth()) {
-                                Text(bookingAt?.let(::appointmentTime) ?: "Choose appointment date & time")
-                            }
-                            OutlinedTextField(bookingService, { bookingService = it }, label = { Text("Service (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            if (services.isNotEmpty()) {
-                                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    services.forEach { service ->
-                                        AssistChip(onClick = { bookingService = service.title }, label = { Text(service.title) })
-                                    }
-                                }
-                            }
-                            Text("Booking status", color = Muted, fontSize = 12.sp)
-                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                bookingStatuses.forEach { status ->
-                                    FilterChip(selected = bookingStatus == status, onClick = { bookingStatus = status }, label = { Text(status) })
                                 }
                             }
                         }
@@ -508,17 +435,12 @@ fun Manager(dao: RecordDao) {
                         val parsed = if (editorType in listOf("Sales", "Expenses", "Services")) amount.toDoubleOrNull() else 0.0
                         when {
                             title.isBlank() || title.length > 250 -> formError = "Enter a title (up to 250 characters)."
-                            notes.length > (if (editorType == "Appointments") 3_000 else 4_000) -> formError = "Notes are too long."
-                            bookingService.length > 250 -> formError = "Service name is too long."
-                            editorType == "Appointments" && bookingAt == null -> formError = "Choose an appointment date and time."
+                            notes.length > 4_000 -> formError = "Notes are too long."
                             parsed == null || !parsed.isFinite() || parsed < 0 -> formError = "Enter a valid, non-negative amount."
                             else -> {
                                 val old = editing
-                                val savedNotes = if (editorType == "Appointments") {
-                                    encodeBooking(BookingMeta(bookingAt!!, bookingService.trim(), bookingStatus, notes.trim()))
-                                } else notes.trim()
                                 val updated = (old ?: Record(type = editorType, title = title.trim())).copy(
-                                    title = title.trim(), amount = parsed, payment = payment, notes = savedNotes
+                                    title = title.trim(), amount = parsed, payment = payment, notes = notes.trim()
                                 )
                                 scope.launch {
                                     try {
@@ -578,8 +500,59 @@ fun Manager(dao: RecordDao) {
 }
 
 @Composable
-private fun StatCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier.padding(bottom = 10.dp), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(12.dp)) {
+private fun StudioHero(
+    salesAmount: String,
+    dateLabel: String,
+    onNewSale: () -> Unit,
+    onNewExpense: () -> Unit
+) {
+    val shape = RoundedCornerShape(20.dp)
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .background(brush = Brush.linearGradient(listOf(Color(0xFF30261A), Panel, Color(0xFF161514))), shape = shape)
+            .border(1.dp, Gold.copy(alpha = 0.35f), shape)
+            .padding(18.dp)
+    ) {
+        Text("STUDIO OVERVIEW", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.8.sp)
+        Spacer(Modifier.height(5.dp))
+        Text(dateLabel, color = Muted, fontSize = 13.sp)
+        Spacer(Modifier.height(13.dp))
+        Text("Today's sales", color = TextColor, fontSize = 15.sp)
+        Text(salesAmount, color = Gold, fontSize = 29.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(onClick = onNewSale, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
+                Text("+ New sale", fontSize = 12.sp, maxLines = 1)
+            }
+            OutlinedButton(onClick = onNewExpense, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
+                Text("+ Expense", fontSize = 12.sp, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LaunchTile(label: String, detail: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = Panel),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(15.dp)) {
+            Text(label, color = TextColor, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+            Spacer(Modifier.height(5.dp))
+            Text(detail, color = Muted, fontSize = 11.sp, maxLines = 2)
+            Spacer(Modifier.height(14.dp))
+            Text("OPEN  ›", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun StatCard(label: String, value: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
+    val interactiveModifier = if (onClick == null) modifier else modifier.clickable { onClick() }
+    Card(interactiveModifier.padding(bottom = 10.dp), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(12.dp)) {
         Column(Modifier.fillMaxWidth().padding(14.dp)) {
             Text(label, color = Muted, fontSize = 12.sp)
             Spacer(Modifier.height(5.dp))
@@ -589,8 +562,8 @@ private fun StatCard(label: String, value: String, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun RecentRecord(record: Record) {
-    Row(Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(10.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun RecentRecord(record: Record, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(record.title, color = TextColor, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("${record.type}  •  ${date(record.createdAt)}", color = Muted, fontSize = 11.sp)

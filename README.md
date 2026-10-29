@@ -1,33 +1,44 @@
-# BARBER & BEYOND Manager — Android v1.3 upgrade
+# Barber & Beyond Manager — Offline Android v1.4
 
-**Offline Android app** powered by ELGON LABS, using Kotlin, Jetpack Compose, and Room/SQLite.
+**ELGON LABS** • Black-and-gold, offline-first business manager for Android 11+.
 
-## What changed
-- Editable **Services** catalogue. Tap **Load suggested studio prices** once to import a starter list; review each price before real use. Services are saved as normal Room records (`type=Services`) and included in v1.3 JSON backups.
-- **Sell** next to any service pre-fills a sales entry; amount stays editable.
-- **Appointments** can now have a specific date, time, service, and status (Booked/Completed/Cancelled), stored safely in existing records. Older appointments remain visible as *legacy bookings* and can be edited to add a proper schedule. No notifications or SMS are sent.
-- Dashboard shows upcoming bookings and catalogue count.
-- Official full logo, launcher icon, gold loading indicator, reports and export/restore are retained.
+## v1.4: streamlined studio operations
 
-## Backup compatibility and safety
-- **Before switching**: in v1.2 go to Reports > Export JSON and save at least two private copies.
-- v1.3 installs separately and does **not** read v1.2 local records automatically. Use Reports > Restore JSON, which **replaces** any current v1.3 records only after confirmation.
-- v1.3 JSON backups use schema 2 to include Services, and the v1.3 restore can read either schema 1 (v1.1/v1.2) or schema 2. Old versions may reject schema 2 backups. Export your records before uninstalling any app.
-- JSON backups are **unencrypted**, protect them like business data.
+- Redesigned **Dashboard** with the studio logo, a dark gold-accented overview, current sales, and a compact, usable mobile layout.
+- Every displayed action is wired to a real interaction: **New sale** opens the sale editor; **Expense** opens the expense editor; **Service prices** opens the catalogue; **Business reports** opens the date-filtered reports; **Export backup** opens Android's Save File dialog.
+- Main navigation: **Dashboard / Sales / Expenses / Services / Reports**. All tabs work and show their corresponding data.
+- Removed **Customers** and **Bookings** from the screens, editors, navigation, recent activity, and dashboard calculations. The historical records are NOT deleted; legacy categories remain accepted in JSON backup/restore so existing backups cannot silently lose data. Old customer/booking records are no longer editable in the app.
+- Existing sales, expenses, services, cash/M-Pesa labels, search, edit, delete confirmation, and JSON backup/restore remain.
+- The official Barber & Beyond Hair Studio splash logo remains unchanged.
 
-## APK builds / signing
+## App identities and safe data migration
 
-The `Build Android APK` workflow runs automatically on pushes to `main` and creates a **PREVIEW DEBUG APK**, installed with app ID `ke.elgonlabs.barberbeyond.manager.preview`. Do **not** depend on preview builds for important records. GitHub Actions debug signing keys are not stable across runners.
+- v1.3 preview was a separate app. **Do not uninstall it or clear its storage.**
+- v1.4 debug preview uses `ke.elgonlabs.barberbeyond.manager.preview14`. It installs alongside the v1.3 preview, with an independent blank local database, so experimentation cannot overwrite current records.
+- Signed v1.4 release uses **`ke.elgonlabs.barberbeyond.manager`**, which will remain the stable application ID for future signed releases. Version code is 5. Only future builds with the **same permanent key** and increasing versionCode can update it in place.
+- Before migrating records: export JSON from the installed app, keep two secure copies, then use the new app's Reports → Restore JSON. **Restoring replaces all records** after confirmation, including historical types hidden by this UI. Check totals and counts before uninstalling any prior app.
+- The app does not have Internet permission. JSON exports are unencrypted; keep them private.
 
-For a proper updateable main app, use the separate **manual** `Build signed Barber Beyond release APK` workflow. It produces the app ID `ke.elgonlabs.barberbeyond.manager` and requires FOUR GitHub Actions repository secrets:
+## Build from GitHub Actions
 
-- `BB_RELEASE_KEYSTORE_B64`: base64-encoded bytes of a private, locally generated PKCS12 keystore (one line)
-- `BB_RELEASE_STORE_PASSWORD`: keystore password
-- `BB_RELEASE_KEY_ALIAS`: alias of your key (e.g. `barber-beyond`)
-- `BB_RELEASE_KEY_PASSWORD`: private-key password (often same as keystore password for PKCS12)
+1. Upload this overlay on top of your existing GitHub repo, preserving paths.
+2. **Build Android APK** runs automatically on push to `main`. Its ZIP artifact is `barber-beyond-v1-4-PREVIEW-apk` and contains a separate **testing** APK.
+3. For the stable main app, visit Actions → **Build signed Barber Beyond release APK** → Run workflow. When signing succeeds, the artifact is `barber-beyond-v1-4-SIGNED-release-apk`, containing `app-release.apk`.
+4. Check build logs before installing anything. This is source code; APK compilation has **not** been verified for v1.4 at the time of packaging.
 
-Generate your signing key **privately on a trusted device**; do NOT commit, post, or share the key, base64 text, password, or secrets. Keep an offline secure backup of the keystore and passwords — losing these means you may not be able to update your signed app. Configure secrets at GitHub repository **Settings → Secrets and variables → Actions → New repository secret**. Only then manually dispatch the signed-release workflow under Actions. Do not install the preview in place of the signed app: they intentionally have different IDs and databases.
+## Signing: root-cause diagnostics and safe compatibility conversion
 
-A release signed with the *same* keystore and *same* app ID can be installed as an update when `versionCode` increases in later versions. The previously installed v1.2 APK cannot be upgraded in place with this new key; migrate records via JSON instead.
+Build #3/#4 of v1.3 failed `TEST A` because Java could not read the `.p12` using GitHub secrets. The v1.4 signed workflow:
 
-Do NOT enable automatic signed releases until secrets are configured. This sample requires direct user setup for signing and has not been compiled/tested yet.
+1. Validates that all four `BB_RELEASE_*` secrets are populated and the keystore decodes.
+2. Uses OpenSSL to verify whether the actual keystore can be unlocked with the configured **store password** (`TEST A`). If this fails, recheck the Base64 and password in GitHub. **Do not regenerate the key.**
+3. Only after TEST A passes, converts the **same existing key/certificate** to a Java-compatible PKCS12 encoding temporarily on the GitHub Actions runner and checks that Java can read its alias and private key (`TEST B`). This is not a new signing identity.
+4. Signs with the converted file and verifies the final APK signature. Signing material is never added to the repository or uploaded as an artifact. Temporary unencrypted PEM material exists only briefly on the isolated runner and is deleted after the conversion.
+
+See `SIGNING-SETUP.md` for phone-based steps. **Never share the `.p12`, secret values, decoded private key, or passwords in a chat or public issue.** The v1.3 preview has a different application ID, and cannot be updated in place by the signed release.
+
+## Limitations
+
+- Still a small offline manager, not a replacement for formal accounting software.
+- Offline records are private to each app installation. No M-Pesa API connection, verified payment processing, or cloud sync.
+- Continue to save JSON backups regularly; clearing app storage or uninstalling an installation can erase its local records.

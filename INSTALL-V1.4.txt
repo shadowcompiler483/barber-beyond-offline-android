@@ -1,0 +1,32 @@
+BARBER & BEYOND v1.4 — ACODE INSTALLATION
+
+1. Extract this ZIP into a NEW folder in Acode's File Browser. Do not extract into your existing Git checkout.
+2. In Acode's Alpine Linux terminal:
+
+   find /public -name INSTALL-V1.4.txt
+
+3. Copy from the extracted folder into your GitHub checkout. The following commands discover that folder automatically; do not enter any sample 4-digit number:
+
+   SOURCE=$(find /public -name INSTALL-V1.4.txt -not -path '/public/barber-beyond-repo/*' -print -quit)
+   test -n "$SOURCE" || { echo 'Extract the ZIP first'; exit 1; }
+   test -d /public/barber-beyond-repo/.git || { echo 'Clone your repo first'; exit 1; }
+   cp -R "$(dirname "$SOURCE")/." /public/barber-beyond-repo/
+
+4. Save to GitHub:
+
+   cd /public/barber-beyond-repo
+   git status --short
+   git config user.name "James Tiller Munyerere"
+   git config user.email "225411105+shadowcompiler483@users.noreply.github.com"
+   git add -A
+   git commit -m "Streamline Barber Beyond dashboard and fix release signing v1.4"
+   git push origin main
+
+5. GitHub Actions > Build Android APK: test preview v1.4 first. It installs separately.
+6. GitHub Actions > Build signed Barber Beyond release APK > Run workflow: inspect the TEST A/TEST B results; download the stable APK only if the run finishes green.
+
+SAFE DATA RULES
+- Export JSON from v1.3 first; keep v1.3 installed until records are restored and checked.
+- No existing records were deleted from source or DB, even though Customers/Bookings are hidden.
+- Never paste private signing keys or GitHub tokens in chat or public files.
+- If you see a red build, send ONLY the failed step name and sanitized error message.

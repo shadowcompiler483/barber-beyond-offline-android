@@ -20,47 +20,65 @@ jobs:
         shell: bash
         env:
           KEY_B64: ${{ secrets.BB_RELEASE_KEYSTORE_B64 }}
-          STORE_PASSWORD: ${{ secrets.BB_RELEASE_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.BB_RELEASE_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.BB_RELEASE_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          if [[ -z "$KEY_B64" || -z "$STORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
-            echo 'Release signing secrets are missing. Configure all four BB_RELEASE_* secrets.' >&2
-            exit 1
-          fi
-          printf '%s' "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/barber-beyond-release.p12"
-          chmod 600 "$RUNNER_TEMP/barber-beyond-release.p12"
-          test -s "$RUNNER_TEMP/barber-beyond-release.p12"
-      - name: Diagnose signing keystore (no secret output)
-        shell: bash
-        env:
           STORE_PASS: ${{ secrets.BB_RELEASE_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.BB_RELEASE_KEY_ALIAS }}
           KEY_PASS: ${{ secrets.BB_RELEASE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          STORE="$RUNNER_TEMP/barber-beyond-release.p12"
-          echo 'TEST A: Can Java open the PKCS12 keystore?'
-          if ! keytool -list -keystore "$STORE" -storetype PKCS12 -storepass:env STORE_PASS >/dev/null 2>&1; then
-            echo 'TEST A FAILED: Java cannot open the keystore. Check the uploaded Base64, store password, or keystore format.'
+          umask 077
+          if [[ -z "$KEY_B64" || -z "$STORE_PASS" || -z "$KEY_ALIAS" || -z "$KEY_PASS" ]]; then
+            echo 'Missing one or more BB_RELEASE_* secrets. No release was produced.' >&2
             exit 1
           fi
-          echo 'TEST A PASSED'
-          echo 'TEST B: Can Java read the private key using the alias and key password?'
-          if ! keytool -importkeystore -srckeystore "$STORE" -srcstoretype PKCS12 -srcstorepass:env STORE_PASS -srcalias "$KEY_ALIAS" -srckeypass:env KEY_PASS -destkeystore "$RUNNER_TEMP/key-check.jks" -deststoretype JKS -deststorepass:env STORE_PASS -destkeypass:env KEY_PASS -noprompt >/dev/null 2>&1; then
-            echo 'TEST B FAILED: Alias, key password, or private-key format is not accepted by Java.'
+          ORIGINAL="$RUNNER_TEMP/barber-beyond-original.p12"
+          COMPAT="$RUNNER_TEMP/barber-beyond-compatible.p12"
+          PEM="$RUNNER_TEMP/barber-beyond-temporary.pem"
+          trap 'rm -f "$PEM"' EXIT
+          if ! printf '%s' "$KEY_B64" | base64 --decode > "$ORIGINAL"; then
+            echo 'TEST A FAILED: Keystore Base64 could not be decoded. Replace BB_RELEASE_KEYSTORE_B64 with a complete fresh copy.' >&2
             exit 1
           fi
-          rm -f "$RUNNER_TEMP/key-check.jks"
-          echo 'TEST B PASSED'
+          test -s "$ORIGINAL" || { echo 'TEST A FAILED: Empty keystore.' >&2; exit 1; }
+          # A correct OpenSSL password and file are required before attempting Java conversion.
+          if ! openssl pkcs12 -info -noout -in "$ORIGINAL" -passin env:STORE_PASS >/dev/null 2>&1; then
+            echo 'TEST A FAILED: OpenSSL cannot unlock the uploaded keystore. Check the original export password and Base64 file.' >&2
+            exit 1
+          fi
+          echo 'TEST A PASSED: OpenSSL can unlock the original signing keystore.'
+          # Normalize the existing key/certificate to a format Java 17 consistently accepts.
+          # The key identity stays the SAME; only the PKCS12 container encoding changes.
+          # Unencrypted PEM is held temporarily only in this isolated Actions runner.
+          if ! openssl pkcs12 -in "$ORIGINAL" -passin env:STORE_PASS -nodes -out "$PEM" >/dev/null 2>&1; then
+            echo 'TEST B FAILED: Could not extract key and certificate from keystore.' >&2
+            exit 1
+          fi
+          if ! openssl pkcs12 -export -in "$PEM" -name "$KEY_ALIAS" -out "$COMPAT" \
+              -passout env:STORE_PASS -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 >/dev/null 2>&1; then
+            echo 'TEST B FAILED: Could not prepare Java-compatible signing keystore.' >&2
+            exit 1
+          fi
+          rm -f "$PEM"
+          if ! keytool -list -keystore "$COMPAT" -storetype PKCS12 \
+              -storepass:env STORE_PASS -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+            echo 'TEST B FAILED: Java still cannot open the normalized keystore.' >&2
+            exit 1
+          fi
+          if ! keytool -importkeystore -srckeystore "$COMPAT" -srcstoretype PKCS12 \
+              -srcstorepass:env STORE_PASS -srcalias "$KEY_ALIAS" -srckeypass:env KEY_PASS \
+              -destkeystore "$RUNNER_TEMP/barber-test.jks" -deststoretype JKS \
+              -deststorepass:env STORE_PASS -destkeypass:env KEY_PASS -noprompt >/dev/null 2>&1; then
+            echo 'TEST B FAILED: Java cannot unlock the private key. Check BB_RELEASE_KEY_PASSWORD.' >&2
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/barber-test.jks"
+          echo 'TEST B PASSED: Java can read and unlock the signing key.'
       - name: Build signed release APK
         env:
-          BB_RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/barber-beyond-release.p12
+          BB_RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/barber-beyond-compatible.p12
           BB_RELEASE_STORE_PASSWORD: ${{ secrets.BB_RELEASE_STORE_PASSWORD }}
           BB_RELEASE_KEY_ALIAS: ${{ secrets.BB_RELEASE_KEY_ALIAS }}
           BB_RELEASE_KEY_PASSWORD: ${{ secrets.BB_RELEASE_KEY_PASSWORD }}
-        run: gradle --no-daemon assembleRelease --stacktrace
+        run: gradle --no-daemon assembleRelease
       - name: Verify APK signature
         run: |
           set -euo pipefail
@@ -68,6 +86,6 @@ jobs:
       - name: Upload signed release APK
         uses: actions/upload-artifact@v4
         with:
-          name: barber-beyond-v1-3-SIGNED-release-apk
+          name: barber-beyond-v1-4-SIGNED-release-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

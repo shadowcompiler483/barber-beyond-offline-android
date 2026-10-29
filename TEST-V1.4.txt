@@ -1,0 +1,24 @@
+BARBER & BEYOND v1.4 — PHONE TEST CHECKLIST
+
+PREVIEW (safe isolated install)
+[ ] App opens with your official studio logo and loading screen
+[ ] Home shows your studio overview and no Customers or Bookings buttons
+[ ] Dashboard, Sales, Expenses, Services, Reports all open when tapped
+[ ] + New sale opens the sale editor, Save makes a record, record persists after restart
+[ ] + Expense opens expense editor, Save updates expense totals
+[ ] Quick access > Service prices opens the catalogue; Sell pre-fills the sale form
+[ ] Quick access > Business reports opens Reports and period filters work
+[ ] Dashboard profit cards open Reports with Today / 7 days / Month selected
+[ ] Recent transaction opens its Edit form
+[ ] Export backup opens Android Save As; JSON is saved correctly
+[ ] Reports > Restore JSON asks confirmation and restores a test backup
+[ ] All current records from old versions remain safe in the old installed app
+
+SIGNED MAIN RELEASE (do only if the workflow passes)
+[ ] TEST A PASSED: uploaded keystore + store secret match
+[ ] TEST B PASSED: compatible keystore/private-key access verified
+[ ] Gradle assembleRelease + apksigner verification green
+[ ] Signed APK installs; use Reports > Restore JSON to migrate after backup
+[ ] Keep v1.3 installed until the signed app's data is fully verified
+
+NOTE: Hidden legacy Customers/Bookings records remain in backups to prevent accidental data loss. They are not presented in the v1.4 interface.

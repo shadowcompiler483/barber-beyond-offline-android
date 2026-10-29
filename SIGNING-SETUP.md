@@ -1,56 +1,36 @@
-# Barber & Beyond stable APK signing — phone/Acode guide
+# Barber & Beyond: permanent APK signing (v1.4)
 
-**Do this only after you have pushed the v1.3 source to GitHub and verified the preview APK compiles.**
+The signed Android app uses `ke.elgonlabs.barberbeyond.manager` (versionCode 5), independent of debug previews. Preserve its package ID and the SAME private signing key for all future in-place releases.
 
-A GitHub Actions debug APK is signed with a temporary debug key that can change on every runner. This project creates a separate debug *preview* app and a permanent *signed release* app. To update signed release installs in future, you must preserve the **exact same signing keystore, passwords and app ID**, and increase `versionCode` on each new release.
+## Existing private key
 
-## 1. Generate a private signing key locally on your Android phone
+Your OpenSSL-created key is at `$HOME/.barber-signing/barber-beyond-release.p12` in the Acode Alpine environment where it was generated. **Keep this original keystore. Do not regenerate it to fix a failed build.** Save a protected copy in a second location before changing anything. Do not commit it to GitHub or copy it into a publicly shared directory.
 
-Inside **Acode Alpine terminal**, install Java's `keytool` (if not installed):
+## Four GitHub Secrets
 
-```sh
-apk add openjdk17-jdk
-```
+GitHub repository → Settings → Secrets and variables → Actions:
 
-Create a **private** location in the Acode terminal home (do not use the public Git repository):
+- `BB_RELEASE_KEYSTORE_B64`: full, single-line base64 output of the **original** `.p12` (`base64 -w 0 "$HOME/.barber-signing/barber-beyond-release.p12"`)
+- `BB_RELEASE_STORE_PASSWORD`: original OpenSSL **Export Password** for the `.p12`
+- `BB_RELEASE_KEY_ALIAS`: `barber-beyond`
+- `BB_RELEASE_KEY_PASSWORD`: same Export Password for the PKCS12 key
 
-```sh
-mkdir -p "$HOME/.barber-signing"
-chmod 700 "$HOME/.barber-signing"
-keytool -genkeypair -v \
-  -keystore "$HOME/.barber-signing/barber-beyond-release.p12" \
-  -storetype PKCS12 -alias barber-beyond \
-  -keyalg RSA -keysize 3072 -validity 10000 \
-  -dname 'CN=Barber and Beyond, O=ELGON LABS, C=KE'
-```
+The earlier encrypted PEM passphrase is not necessarily the export password. Never post these values or their encoded form in ChatGPT, screenshots, issues, or code. Base64 is **not encryption**.
 
-Choose a strong unique keystore password when prompted. **Do not send your keystore, secret text or passwords to ChatGPT or post them in GitHub files.** For PKCS12, the key password normally matches the keystore password.
+## What the v1.4 signed workflow checks
 
-## 2. Back up the keystore PRIVATELY
+`TEST A`: Can OpenSSL open the uploaded keystore using the GitHub store-password secret?
 
-Keep a secure copy of `barber-beyond-release.p12` and the password somewhere other than the phone. This is the signing identity for all future releases. If you lose it, you may lose the ability to deliver in-place updates to the signed app. A private encrypted backup (not the public repo) is strongly recommended. Never commit the key, even if it is base64-encoded.
+- If FAILED: wrong/mismatched password, Base64 truncation, or wrong `.p12` file. Verify the original locally with `openssl pkcs12 -info -noout -in "$HOME/.barber-signing/barber-beyond-release.p12"` and update the two relevant GitHub secrets privately. Do not regenerate a different key.
+- If PASSED: the original keystore and store password are readable. The workflow temporarily repackages the SAME private key/certificate using compatibility PKCS12 algorithms for Java 17. This does not change the signing certificate.
 
-## 3. Configure GitHub Actions secrets
+`TEST B`: Does Java read the compatible keystore and unlock its alias/private key?
 
-Open your repo in Chrome: **Settings → Secrets and variables → Actions → New repository secret**. Add four secrets:
+- If FAILED: check alias and `BB_RELEASE_KEY_PASSWORD`; if Java still cannot unlock it, inspect only the sanitized error without revealing secrets.
+- If PASSED: Gradle signs the release APK; Android's `apksigner` then verifies it.
 
-- `BB_RELEASE_KEYSTORE_B64` = the **one-line base64** version of the `.p12` keystore, copied privately from your local terminal command below.
-- `BB_RELEASE_STORE_PASSWORD` = keystore password.
-- `BB_RELEASE_KEY_ALIAS` = `barber-beyond`.
-- `BB_RELEASE_KEY_PASSWORD` = private key password (normally same as store password for PKCS12).
+## Obtain the signed APK
 
-Display the keystore's base64 text only when you are ready to copy it into GitHub's secret form:
+GitHub Actions → **Build signed Barber Beyond release APK** → **Run workflow** → green result → Artifacts → `barber-beyond-v1-4-SIGNED-release-apk` → extract and install `app-release.apk`.
 
-```sh
-base64 -w 0 "$HOME/.barber-signing/barber-beyond-release.p12"
-```
-
-Your device screen and clipboard will contain the secret during copying. Do this somewhere private, avoid screenshots, then clear the clipboard. **Base64 does not encrypt the keystore.**
-
-## 4. Generate your first stable signed APK
-
-GitHub → Actions → **Build signed Barber Beyond release APK** → **Run workflow**. When green, download the `barber-beyond-v1-3-SIGNED-release-apk` artifact ZIP and extract/install `app-release.apk`. The stable app ID is `ke.elgonlabs.barberbeyond.manager`.
-
-The auto-build under **Build Android APK** creates `barber-beyond-v1-3-PREVIEW-apk` with app ID `ke.elgonlabs.barberbeyond.manager.preview`. That separate APK is for testing only; it will not update the signed release and its data is isolated.
-
-**Before switching from v1.2:** export its JSON backup, save a spare copy, then use v1.3 Reports → Restore JSON in the new signed app, which replaces existing records after asking for confirmation. Keep v1.2 installed until the restored counts match.
+Do not uninstall your current v1.3 debug app. Export a JSON backup before installing v1.4; after successfully installing the signed release, open **Reports → Restore JSON** and verify records. That signed app is independent from the preview app. Future signed releases will update it only if the signing certificate and app ID remain unchanged and `versionCode` increases.
