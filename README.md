@@ -1,6 +1,6 @@
 # Barber & Beyond Manager — Offline Android v1.4
 
-**ELGON LABS** • Black-and-gold, offline-first business manager for Android 11+.
+**TILLERN LABS** • Black-and-gold, offline-first business manager for Android 11+.
 
 ## v1.4: streamlined studio operations
 
